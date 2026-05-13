@@ -2,13 +2,14 @@
 #include <WiFiClientSecure.h>
 #include <UniversalTelegramBot.h>
 #include "DHT.h"
-
+#include <WiFiManager.h>
+#include <ArduinoOTA.h>
 // =====================================================
 // WIFI
 // =====================================================
 
-const char* ssid = "Matias";
-const char* password = "CHEVI1970";
+// const char* ssid = "Matias";
+// const char* password = "CHEVI1970";
 
 // =====================================================
 // TELEGRAM
@@ -364,28 +365,49 @@ void setup() {
   dht.begin();
 
   // ==========================================
-  // WIFI
+  // WIFI MANAGER
   // ==========================================
 
-  WiFi.mode(WIFI_STA);
+  WiFiManager wm;
 
-  WiFi.begin(ssid, password);
+  Serial.println("Conectando WiFi...");
 
-  Serial.print("Conectando WiFi");
+  bool res = wm.autoConnect("Extractor-Setup");
 
-  while (WiFi.status() != WL_CONNECTED) {
+  if (!res) {
 
-    delay(500);
-    Serial.print(".");
+    Serial.println("❌ No se pudo conectar al WiFi");
+
+    ESP.restart();
   }
-
-  Serial.println("");
 
   Serial.println("✅ WiFi conectado");
 
   client.setInsecure();
 
-  Serial.println("✅ Sistema iniciado");
+  Serial.println("🔥 OTA FUNCIONANDO");
+
+  ArduinoOTA.setHostname("Extractor-Banio");
+
+  ArduinoOTA.onStart([]() {
+    Serial.println("🔄 Iniciando actualización OTA");
+  });
+
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\n✅ OTA finalizada");
+  });
+
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progreso OTA: %u%%\r", (progress / (total / 100)));
+  });
+
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("❌ Error OTA [%u]\n", error);
+  });
+
+  ArduinoOTA.begin();
+
+  Serial.println("✅ OTA listo");
 }
 
 // =====================================================
@@ -395,6 +417,8 @@ void setup() {
 void loop() {
 
   yield();
+
+  ArduinoOTA.handle();
 
   unsigned long ahora = millis();
 
