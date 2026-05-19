@@ -29,6 +29,11 @@ unsigned long tiempoForzadoON;
 unsigned long intervaloLectura   = 3000;
 unsigned long intervaloTelegram  = 1000;
 
+// Espera de 40 minutos después del corte por tiempo
+unsigned long tiempoEsperaReintento = 40UL * 60UL * 1000UL;
+unsigned long inicioEsperaReintento = 0;
+bool esperandoReintento = false;
+
 bool estadoRelay = false;
 bool sensorLeido = false;
 
@@ -224,8 +229,32 @@ void enviarEstado(String chat_id) {
 
   if (estadoRelay) {
     mensaje += "ENCENDIDO";
+
+    unsigned long minutos =
+      (ahoraGlobal - tiempoEncendido) / 60000UL;
+
+    mensaje += "\nTiempo encendido: ";
+    mensaje += String(minutos);
+    mensaje += " min";
+
   } else {
     mensaje += "APAGADO";
+  }
+
+  if (esperandoReintento) {
+    unsigned long transcurrido =
+      ahoraGlobal - inicioEsperaReintento;
+
+    unsigned long restante = 0;
+
+    if (transcurrido < tiempoEsperaReintento) {
+      restante =
+        (tiempoEsperaReintento - transcurrido) / 60000UL;
+    }
+
+    mensaje += "\nEspera reintento: ";
+    mensaje += String(restante);
+    mensaje += " min";
   }
 
   bot.sendMessageWithReplyKeyboard(
@@ -579,6 +608,16 @@ void loop() {
   }
 
   if (modoActual == AUTO) {
+
+    if (esperandoReintento) {
+      if (ahoraGlobal - inicioEsperaReintento >= tiempoEsperaReintento) {
+        esperandoReintento = false;
+        Serial.println("🔁 Fin de espera. Vuelve a sensar humedad.");
+      } else {
+        return;
+      }
+    }
+
     if (!estadoRelay && humedadActual >= humedad_encendido) {
       prenderRelay();
     }
@@ -588,9 +627,19 @@ void loop() {
       apagarRelay();
     }
 
-    if (estadoRelay && (ahoraGlobal - tiempoEncendido >= tiempoMaxEncendido)) {
-      Serial.println("⏱️ Apagado por tiempo máximo");
-      apagarRelay();
+    if (estadoRelay && tiempoMaxEncendido > 0) {
+      unsigned long tiempoPrendido = ahoraGlobal - tiempoEncendido;
+
+      if (tiempoPrendido >= tiempoMaxEncendido) {
+        Serial.println("⏱️ Apagado por tiempo máximo");
+
+        apagarRelay();
+
+        esperandoReintento = true;
+        inicioEsperaReintento = ahoraGlobal;
+
+        Serial.println("⏳ Esperando 40 minutos antes de volver a sensar");
+      }
     }
   }
 
@@ -613,7 +662,6 @@ void loop() {
     }
   }
 }
-
 
 WiFi setup: Extractor-Setup
 Portal: 192.168.4.1
